@@ -5,7 +5,7 @@ const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: 'root',    // Your MySQL username
   password: 'Jajoo@2001', // Your MySQL password
-  database: process.env.DB_NAME, // Your database name
+  database: 'feedback_sql', // Your database name
   port: process.env.DB_PORT, // Default MySQL port
 });
 

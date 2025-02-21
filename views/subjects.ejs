@@ -175,6 +175,11 @@
                 <input type="text" id="subject_code" name="subject_code" required>
             </div>
 
+            <div class="form-group">
+                <label for="subject_semester">Semester:</label>
+                <input type="text" id="subject_semester" name="subject_semester" required>
+            </div>
+
             <button type="submit" class="btn btn-primary">Add Subject</button>
         </form>
     </div>
@@ -182,7 +187,7 @@
     <div class="card">
         <h2>Upload Subjects via Excel</h2>
         <p><strong>File Format:</strong> The file should be formatted with the following columns: 
-            <code>name , discipline_name , branch_name            </code>
+            <code>name , discipline_name , branch_name  , semester , subject_code</code>
             </p>
         <form action="/subjects/upload" method="POST" enctype="multipart/form-data">
             <div class="form-group">
@@ -198,18 +203,24 @@
         <table>
             <thead>
                 <tr>
+                    <th>Id</th>
                     <th>Discipline</th>
                     <th>Branch</th>
                     <th>Subject</th>
+                    <!-- <th>Subject Code</th> -->
+                    <th>Semester</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <% subjects.forEach(subject => { %>
                     <tr>
+                        <td><%= subject.subject_id %></td>
                         <td><%= subject.discipline_name %></td>
                         <td><%= subject.branch_name %></td>
                         <td><%= subject.name %></td>
+                        <!-- <td><%= subject.subject_code %></td> -->
+                        <td><%= subject.semester %></td>
                         <td class="table-actions">
                             <!-- <form action="/subjects/delete/<%= subject.subject_id %>" method="POST" style="display:inline;">
                                 <button type="submit" class="btn btn-danger">Delete</button>

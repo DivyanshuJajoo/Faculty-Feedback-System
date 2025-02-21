@@ -254,71 +254,15 @@
 
 <div class="main">
     <div class="slider">
-        <button id="semesterMappingBtn" class="active">Subject to Semester Mapping</button>
-        <button id="facultyMappingBtn">Faculty to Subject Mapping</button>
+        <button id="facultyMappingBtn" class="active">Faculty to Subject Mapping</button>
         <button id="studentMappingBtn">Student to Subject Mapping</button>
-    </div>
+    </div>  
     
-    <div id="semesterMapping" class="tab-content active">
-     <div class="card">
-        <h1>Subject to Semester Mapping</h1>
-        <h8>Note: Map subject to garbage semester value 11 if it need not be mapped to any semester. </h8>
-        <form id="subjectSemesterForm" action="/mapping/subjectSemester" method="POST">
-            <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                <label for="discipline">Discipline:</label>
-                <select id="discipline" name="discipline" required>
-                    <% disciplines.forEach(discipline => { %>
-                        <option value="<%= discipline.id %>"><%= discipline.name %></option>
-                    <% }); %>
-                </select>
 
-                <label for="branch">Branch:</label>
-                <select id="branch" name="branch" required>
-                    <!-- Options will be populated dynamically -->
-                </select>
-
-                <label for="year">Year:</label>
-                <select id="year" name="year" required>
-                    <!-- Options will be populated dynamically based on discipline duration -->
-                </select>
-
-                <label for="semester">Semester:</label>
-                <input type="number" id="semester" name="semester" min="1" required>
-
-                <label for="subject">Subject:</label>
-                <select id="subject" name="subject" required>
-                    <!-- Options will be populated dynamically -->
-                </select>
-            </div>
-
-            <button type="submit">Map Subject to Semester</button>
-        </form>
-
-        <h2>Subject to Semester Mapping Table</h2>
-        <table>
-            <thead>
-            <tr>
-                <th>Subject</th>
-                <th>Semester</th>
-                
-            </tr>
-            </thead>
-            <tbody>
-            <% subjectSemesterMappings.forEach(mapping => { %>
-                <tr>
-                    <td><%= mapping.subjectname %></td>
-                    <td><%= mapping.semester %></td>
-                    
-                </tr>
-            <% }); %>
-            </tbody>
-        </table>
-    </div>
-    </div>
-
-    <div id="facultyMapping" class="tab-content">
+    <div id="facultyMapping" class="tab-content active">
         <div class="card">
         <h1>Faculty to Subject Mapping</h1>
+        <p><strong>This mapping is not for students present in first year. For first year upload excel below.</strong> </p>
         <form id="facultySubjectForm" action="/mapping/facultySubject" method="POST">
             <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                 <label for="discipline2">Discipline:</label>
@@ -357,6 +301,22 @@
             <button type="submit">Map Faculty to Subject</button>
         </form>
 
+        <div class="card">
+            <h1>Upload Faculty Subject Excel File</h1>
+            <p><strong>Uploading excel is available for all years.</strong> </p>
+            <p><strong>File Format:</strong> The file should be formatted with the following columns: 
+                <code>faculty_id, subject_id, section, is_elective</code>
+                </p>
+            <form action="/api/mapping/facultySubjectUpload" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="facultyFile">Choose Excel File:</label>
+                    <input type="file" id="facultyFile" name="facultyFile" accept=".xlsx, .xls" class="form-control-file" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Upload</button>
+            </form>
+            <div id="uploadMessage" style="margin-top: 10px; font-weight: bold;"></div>
+        </div>
+
         <h2>Faculty to Subject Mapping Table</h2>
         <table>
             <thead>
@@ -370,8 +330,8 @@
             <tbody>
             <% facultySubjectMappings.forEach(mapping => { %>
                 <tr>
-                    <td><%= mapping.facultyname %></td>
-                    <td><%= mapping.subjectname %></td>
+                    <td><%= mapping.facultyName %></td>
+                    <td><%= mapping.subjectName %></td>
                     <td><%= mapping.section %></td>
                     
                 </tr>
@@ -400,140 +360,119 @@
 
 <script src="/assets/js/bootstrap.bundle.min.js"></script>
 <script>
+    
+    document.querySelector('form').addEventListener('submit', async function (event) {
+    event.preventDefault(); // Prevent default form submission
+
+    const formData = new FormData(this);
+    const response = await fetch('/api/mapping/facultySubjectUpload', {
+        method: 'POST',
+        body: formData
+    });
+
+    const result = await response.json();
+    const alertBox = document.getElementById('alertBox');
+
+    if (result.status === 'success') {
+        alertBox.className = 'alert alert-success';
+    } else {
+        alertBox.className = 'alert alert-danger';
+    }
+
+    alertBox.textContent = result.message;
+    alertBox.style.display = 'block';
+
+    setTimeout(() => {
+        alertBox.style.display = 'none';
+    }, 5000);
+});
+
     document.addEventListener('DOMContentLoaded', function () {
-        const semesterMappingBtn = document.getElementById('semesterMappingBtn');
-        const facultyMappingBtn = document.getElementById('facultyMappingBtn');
-        const semesterMapping = document.getElementById('semesterMapping');
-        const facultyMapping = document.getElementById('facultyMapping');
+    const facultyMappingBtn = document.getElementById('facultyMappingBtn');
+    const studentMappingBtn = document.getElementById('studentMappingBtn');
+    const facultyMapping = document.getElementById('facultyMapping');
+    const studentMapping = document.getElementById('studentMapping');
 
-        semesterMappingBtn.addEventListener('click', function () {
-            semesterMapping.classList.add('active');
-            facultyMapping.classList.remove('active');
-            semesterMappingBtn.classList.add('active');
-            facultyMappingBtn.classList.remove('active');
-        });
+    facultyMappingBtn.addEventListener('click', function () {
+        facultyMapping.classList.add('active');
+        studentMapping.classList.remove('active');
+        facultyMappingBtn.classList.add('active');
+        studentMappingBtn.classList.remove('active');
+    });
 
-        facultyMappingBtn.addEventListener('click', function () {
-            facultyMapping.classList.add('active');
-            semesterMapping.classList.remove('active');
-            facultyMappingBtn.classList.add('active');
-            semesterMappingBtn.classList.remove('active');
-        });
+    studentMappingBtn.addEventListener('click', function () {
+        facultyMapping.classList.remove('active');
+        studentMapping.classList.add('active');
+        facultyMappingBtn.classList.remove('active');
+        studentMappingBtn.classList.add('active');
+    });
 
-        studentMappingBtn.addEventListener('click', function () {
-            facultyMapping.classList.remove('active');
-            semesterMapping.classList.remove('active');
-            facultyMappingBtn.classList.remove('active');
-            semesterMappingBtn.classList.remove('active');
-            studentMapping.classList.add('active');
-            studentMappingBtn.classList.add('active');
-        });
+    const disciplineSelect2 = document.getElementById('discipline2');
+    const branchSelect2 = document.getElementById('branch2');
+    const subjectSelect2 = document.getElementById('subject2');
+    const facultySelect = document.getElementById('faculty');
 
-        const disciplineSelect = document.getElementById('discipline');
-        const branchSelect = document.getElementById('branch');
-        const subjectSelect = document.getElementById('subject');
-        const yearSelect = document.getElementById('year');
+    disciplineSelect2.addEventListener('change', function () {
+        branchSelect2.innerHTML = '<option value="">Select Branch</option>';
+        facultySelect.innerHTML = '<option value="">Select Faculty</option>';
 
-        disciplineSelect.addEventListener('change', function () {
-            fetch(`/api/branches/${this.value}`)
-                .then(response => response.json())
-                .then(data => {
-                    branchSelect.innerHTML = '<option value="">Select Branch</option>';
-                    data.forEach(branch => {
-                        branchSelect.innerHTML += `<option value="${branch.branch_id}">${branch.branch_name}</option>`;
-                    });
+        fetch(`/api/branches/${this.value}`)
+            .then(response => response.json())
+            .then(data => {
+                branchSelect2.innerHTML = '<option value="">Select Branch</option>';
+                data.forEach(branch => {
+                    branchSelect2.innerHTML += `<option value="${branch.branch_id}">${branch.branch_name}</option>`;
                 });
-
-            fetch(`/api/discipline/${this.value}/duration`)
-                .then(response => response.json())
-                .then(data => {
-                    yearSelect.innerHTML = '<option value="">Select Year</option>';
-                    for (let i = 1; i <= data.duration; i++) {
-                        yearSelect.innerHTML += `<option value="${i}">${i}</option>`;
-                    }
-                });
-        });
-
-        branchSelect.addEventListener('change', function () {
-            fetch(`/api/subjects/${this.value}`)
-                .then(response => response.json())
-                .then(data => {
-                    subjectSelect.innerHTML = '<option value="">Select Subject</option>';
-                    data.forEach(subject => {
-                        subjectSelect.innerHTML += `<option value="${subject.subject_id}">${subject.name}</option>`;
-                    });
-                });
-        });
-
-        // Faculty Mapping Section
-        const disciplineSelect2 = document.getElementById('discipline2');
-        const branchSelect2 = document.getElementById('branch2');
-        const subjectSelect2 = document.getElementById('subject2');
-        const facultySelect = document.getElementById('faculty');
-
-        disciplineSelect2.addEventListener('change', function () {
-            // Clear the branch and faculty selects when discipline changes
-            branchSelect2.innerHTML = '<option value="">Select Branch</option>';
-            facultySelect.innerHTML = '<option value="">Select Faculty</option>';
-            
-            fetch(`/api/branches/${this.value}`)
-                .then(response => response.json())
-                .then(data => {
-                    branchSelect2.innerHTML = '<option value="">Select Branch</option>';
-                    data.forEach(branch => {
-                        branchSelect2.innerHTML += `<option value="${branch.branch_id}">${branch.branch_name}</option>`;
-                    });
-                });
-        });
-
-        branchSelect2.addEventListener('change', function () {
-            // Fetch and populate subjects based on branch_id
-            fetch(`/api/subjects/${this.value}`)
-                .then(response => response.json())
-                .then(data => {
-                    subjectSelect2.innerHTML = '<option value="">Select Subject</option>';
-                    data.forEach(subject => {
-                        subjectSelect2.innerHTML += `<option value="${subject.subject_id}">${subject.name}</option>`;
-                    });
-                });
-
-            // Fetch and populate faculty based on branch_id
-            fetch(`/api/faculty/${this.value}`)
-                .then(response => response.json())
-                .then(data => {
-                    facultySelect.innerHTML = '<option value="">Select Faculty</option>';
-                    data.forEach(faculty => {
-                        facultySelect.innerHTML += `<option value="${faculty.id}">${faculty.name}</option>`;
-                    });
-                });
-        });
-
-        document.querySelectorAll('.delete-btn').forEach(button => {
-            button.addEventListener('click', function (event) {
-                event.preventDefault();
-                const id = this.getAttribute('data-id');
-                if (confirm('Are you sure you want to delete this item?')) {
-                    fetch(`/api/mapping/delete/${id}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    })
-                    .then(response => {
-                        if (response.ok) {
-                            alert('Item deleted successfully.');
-                            location.reload();
-                        } else {
-                            alert('Failed to delete item.');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                    });
-                }
             });
+    });
+
+    branchSelect2.addEventListener('change', function () {
+        fetch(`/api/subjects/${this.value}`)
+            .then(response => response.json())
+            .then(data => {
+                subjectSelect2.innerHTML = '<option value="">Select Subject</option>';
+                data.forEach(subject => {
+                    subjectSelect2.innerHTML += `<option value="${subject.subject_id}">${subject.name}</option>`;
+                });
+            });
+
+        fetch(`/api/faculty/${this.value}`)
+            .then(response => response.json())
+            .then(data => {
+                facultySelect.innerHTML = '<option value="">Select Faculty</option>';
+                data.forEach(faculty => {
+                    facultySelect.innerHTML += `<option value="${faculty.id}">${faculty.name}</option>`;
+                });
+            });
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const id = this.getAttribute('data-id');
+            if (confirm('Are you sure you want to delete this item?')) {
+                fetch(`/api/mapping/delete/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        alert('Item deleted successfully.');
+                        location.reload();
+                    } else {
+                        alert('Failed to delete item.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            }
         });
     });
+});
+
 </script>
 
 </body>

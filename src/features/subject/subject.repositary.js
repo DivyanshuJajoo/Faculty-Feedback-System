@@ -65,4 +65,56 @@ export default class subjectRepository {
 
     return faculties;
   }
+
+  async fetch_firstyear_data(section) {
+    const db = getDB();
+
+    // Fetch subject_id and faculty_id for the given section
+    const [rows] = await db.execute(
+        "SELECT subject_id, faculty_id FROM subject_faculty WHERE section = ?",
+        [section]
+    );
+
+    if (rows.length === 0) {
+        return { subjects: [], faculties: [] };
+    }
+
+    const subjectIds = rows.map(row => row.subject_id);
+    const facultyIds = rows.map(row => row.faculty_id);
+
+    // Fetch subject names
+    const subjectQuery = subjectIds.length > 0
+        ? `SELECT subject_id, name FROM subjectnew WHERE subject_id IN (${subjectIds.join(",")})`
+        : null;
+
+    const facultyQuery = facultyIds.length > 0
+        ? `SELECT id, name FROM faculty WHERE id IN (${facultyIds.join(",")})`
+        : null;
+
+    const [subjectRows] = subjectQuery ? await db.execute(subjectQuery) : [[]];
+    const [facultyRows] = facultyQuery ? await db.execute(facultyQuery) : [[]];
+
+    // Map faculty to subjects
+    const faculties = rows.map(row => {
+        const subject = subjectRows.find(sub => sub.subject_id === row.subject_id);
+        const faculty = facultyRows.find(fac => fac.id === row.faculty_id);
+
+        return {
+            subject: subject ? subject.name : "Unknown Subject",
+            Assigned_faculty: {
+                id: faculty ? faculty.id : null,
+                faculty_name: faculty ? faculty.name : "Unknown Faculty",
+                is_elective: 0
+            }
+        };
+    });
+
+    return {
+        subjects: subjectRows,
+        faculties: faculties
+    };
+}
+
+
+
 }

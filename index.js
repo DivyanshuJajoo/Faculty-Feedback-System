@@ -384,7 +384,7 @@ app.get('/subjects', checkAuthenticated, async (req, res) => {
       [disciplinesResult] = await db.execute('SELECT * FROM discipline WHERE id = ?', [userDisciplineId]);
       [branchesResult] = await db.execute('SELECT * FROM branchnew WHERE branch_id = ?', [userBranchId]);
       [subjectsResult] = await db.execute(`
-        SELECT s.subject_id, s.name, d.name AS discipline_name, b.branch_name
+        SELECT s.subject_id, s.name,s.subject_code,s.semester, d.name AS discipline_name, b.branch_name
         FROM subjectnew s
         JOIN branchnew b ON s.branch_id = b.branch_id
         JOIN discipline d ON b.discipline_id = d.id
@@ -395,7 +395,7 @@ app.get('/subjects', checkAuthenticated, async (req, res) => {
       [disciplinesResult] = await db.execute('SELECT * FROM discipline WHERE id = ?', [userDisciplineId]);
       [branchesResult] = await db.execute('SELECT * FROM branchnew WHERE discipline_id = ?', [userDisciplineId]);
       [subjectsResult] = await db.execute(`
-        SELECT s.subject_id, s.name, d.name AS discipline_name, b.branch_name
+        SELECT s.subject_id, s.name,s.subject_code,s.semester, d.name AS discipline_name, b.branch_name
         FROM subjectnew s
         JOIN branchnew b ON s.branch_id = b.branch_id
         JOIN discipline d ON b.discipline_id = d.id
@@ -408,7 +408,7 @@ app.get('/subjects', checkAuthenticated, async (req, res) => {
           SELECT discipline_id FROM branchnew WHERE branch_id = ?
         )`, [userBranchId]);
       [subjectsResult] = await db.execute(`
-        SELECT s.subject_id, s.name, d.name AS discipline_name, b.branch_name
+        SELECT s.subject_id, s.name,s.subject_code,s.semester, d.name AS discipline_name, b.branch_name
         FROM subjectnew s
         JOIN branchnew b ON s.branch_id = b.branch_id
         JOIN discipline d ON b.discipline_id = d.id
@@ -418,11 +418,19 @@ app.get('/subjects', checkAuthenticated, async (req, res) => {
       [disciplinesResult] = await db.execute('SELECT * FROM discipline');
       [branchesResult] = await db.execute('SELECT * FROM branchnew');
       [subjectsResult] = await db.execute(`
-        SELECT s.subject_id, s.name, d.name AS discipline_name, b.branch_name
+        SELECT s.subject_id, s.name,s.subject_code,s.semester, d.name AS discipline_name, b.branch_name
         FROM subjectnew s
         JOIN branchnew b ON s.branch_id = b.branch_id
         JOIN discipline d ON b.discipline_id = d.id
       `);
+      const [nullBranchSubjects] = await db.execute(`
+        SELECT s.subject_id, s.name,s.subject_code,s.semester, d.name AS discipline_name, '' AS branch_name 
+        FROM subjectnew s ,discipline d
+        WHERE s.discipline_id = d.id AND s.branch_id IS NULL`
+        );
+      
+      // Append subjects with NULL branch_id to the main result
+      subjectsResult.push(...nullBranchSubjects);
     }
 
     // Render the page with the results
@@ -444,10 +452,11 @@ app.post('/subjects/add', async (req, res) => {
   const branch_id = req.body.branch_id;
   const discipline_id = req.body.discipline_id;
   const subject_code=req.body.subject_code;
+  const subject_semester=req.body.subject_semester;
 
   try {
-    await db.execute('INSERT INTO subjectnew (discipline_id, branch_id, name, subject_code) VALUES (?, ?, ?,?)', 
-      [discipline_id, branch_id, subject_name,subject_code]);
+    await db.execute('INSERT INTO subjectnew (discipline_id, branch_id, name, subject_code,semester) VALUES (?, ?, ?,?,?)', 
+      [discipline_id, branch_id, subject_name,subject_code,subject_semester]);
     res.redirect('/subjects');
   } catch (err) {
     console.error(err);
@@ -476,9 +485,12 @@ app.get('/subjects/edit/:id', checkAuthenticated, async (req, res) => {
 
   try {
     const [subjectResult] = await db.execute(`
-      SELECT s.subject_id AS id, s.name AS subject_name, d.name AS discipline_name, b.branch_name, s.discipline_id, s.branch_id
+      SELECT s.subject_id AS id, s.subject_code AS code, s.semester AS semester, 
+             s.name AS subject_name, d.name AS discipline_name, 
+             COALESCE(b.branch_name, '') AS branch_name, 
+             s.discipline_id, s.branch_id
       FROM subjectnew s
-      JOIN branchnew b ON s.branch_id = b.branch_id
+      LEFT JOIN branchnew b ON s.branch_id = b.branch_id
       JOIN discipline d ON s.discipline_id = d.id
       WHERE s.subject_id = ?`, [subjectId]);
     
@@ -500,24 +512,33 @@ app.get('/subjects/edit/:id', checkAuthenticated, async (req, res) => {
   }
 });
 
-// POST /subjects/edit/:id - Update subject details
+
 app.post('/subjects/edit/:id', async (req, res) => {
-  const subjectId = req.params.id;
   const db = getDB();
-  const { subject_name, branch_id } = req.body;
+  let { subject_name, branch_id, subject_code, subject_semester } = req.body;
+  const subjectId = req.params.id;
+  
+  console.log(req.body);
+
+  // Convert empty branch_id to NULL for SQL query
+  if (!branch_id || branch_id === '') {
+    branch_id = null;
+  }
 
   try {
     await db.execute(`
       UPDATE subjectnew
-      SET name = ?, branch_id = ?
+      SET name = ?, branch_id = ?, subject_code = ?, semester = ?
       WHERE subject_id = ?`, 
-      [subject_name, branch_id, subjectId]);
+      [subject_name, branch_id, subject_code, subject_semester, subjectId]);
+      
     res.redirect('/subjects');
   } catch (err) {
     console.error(err);
     res.send("Error " + err);
   }
 });
+
 
 // POST /subjects/upload - Upload subject data
 app.post('/subjects/upload', async (req, res) => {
@@ -541,19 +562,28 @@ app.post('/subjects/upload', async (req, res) => {
       const data = xlsx.utils.sheet_to_json(sheet);
 
       for (const row of data) {
-        const { name,subject_code, discipline_name, branch_name } = row;
+        const { name, subject_code, semester, discipline_name, branch_name } = row;
 
+        // Get Discipline ID
         const [disciplineResult] = await db.execute('SELECT id FROM discipline WHERE name = ?', [discipline_name]);
-        const discipline = disciplineResult[0];
+        const discipline = disciplineResult.length ? disciplineResult[0] : null;
 
-        const [branchResult] = await db.execute('SELECT branch_id FROM branchnew WHERE branch_name = ? AND discipline_id = ?', [branch_name, discipline.id]);
-        const branch = branchResult[0];
+        let branchId = null;
+        if (branch_name) {
+          const [branchResult] = await db.execute(
+            'SELECT branch_id FROM branchnew WHERE branch_name = ? AND discipline_id = ?',
+            [branch_name, discipline ? discipline.id : null]
+          );
+          branchId = branchResult.length ? branchResult[0].branch_id : null;
+        }
 
-        if (discipline && branch) {
-          await db.execute('INSERT INTO subjectnew (name,subject_code, discipline_id, branch_id) VALUES (?, ?, ?,?)', 
-            [name,subject_code, discipline.id, branch.branch_id]);
+        if (discipline) {
+          await db.execute(
+            'INSERT INTO subjectnew (name, subject_code, semester, discipline_id, branch_id) VALUES (?, ?, ?, ?, ?)', 
+            [name, subject_code, semester, discipline.id, branchId]
+          );
         } else {
-          console.error(`Discipline or Branch not found for subject: ${name}`);
+          console.error(`Discipline not found for subject: ${name}`);
         }
       }
 
@@ -565,7 +595,6 @@ app.post('/subjects/upload', async (req, res) => {
     }
   });
 });
-
 
 
 
@@ -1086,6 +1115,67 @@ app.get('/mapping', checkAuthenticated, async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
+
+app.post('/api/mapping/facultySubjectUpload', async (req, res) => {
+    if (!req.files || !req.files.facultyFile) {
+      return res.status(400).send('No files were uploaded.');
+    }
+
+    const facultyFile = req.files.facultyFile;
+    const uploadPath = path.join(__dirname, 'uploads', facultyFile.name);
+
+    facultyFile.mv(uploadPath, async (err) => {
+        if (err) {
+          return res.status(500).send(err);
+        }
+
+        try {
+            const workbook = xlsx.readFile(uploadPath);
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const data = xlsx.utils.sheet_to_json(sheet);
+
+            // console.log('Uploaded Data:', data);
+
+            // Check for missing values
+            for (const item of data) {
+                if (!item.faculty_id || !item.subject_id || !item.section) {
+                    fs.unlinkSync(uploadPath);
+                    return res.json({ success: false, message: 'File contains empty faculty_id, subject_id, or section.' });
+                }
+            }
+
+            // Insert into MySQL database
+            const insertQuery = `
+                INSERT IGNORE INTO subject_faculty (faculty_id, subject_id, section, is_elective)
+                VALUES (?, ?, ?, ?);
+            `;
+
+            const db = getDB();
+            for (const item of data) {
+                await db.execute(insertQuery, [
+                    item.faculty_id,
+                    item.subject_id,
+                    item.section,
+                    item.is_elective
+                ]);
+            }
+
+            fs.unlinkSync(uploadPath);
+            return res.status(200).send('Faculty-subject data uploaded successfully.');
+
+        } catch (err) {
+            console.error('Error processing file:', err);
+            fs.unlinkSync(uploadPath);
+            res.status(500).send('Error processing the file: ' + err.message);
+        }
+    });
+});
+
+
+
+
 
 // Route to handle student-subject mapping upload
 app.post('/api/mapping/studentSubject', async (req, res) => {
