@@ -336,29 +336,195 @@ app.get('/accessing',checkAuthenticated, (req, res) => {
   res.render('accessing.ejs'); 
 })
 
-app.post("/signup", async(req, res) => { 
-  const db= getDB();
-  const unqique=req.body.uniqueid;
-  const name=req.body.name;
-  const password=req.body.password;
-//   try{
-//     const query=await db.execute('SELECT * FROM users WHERE {unique}= uniqueid ');
-  
-//   if(query){
-//  console.log("The user already exists");
-//   }
-//   else{
-//     const query2= db.execute('INSERT VALUES INTO COLUMNS("unique_id", "name" , "role" , "has_filled", "password", "branch_name", "year", "section") VALUES('{unqique} ,{name},"faculty", {password}, "branch_name", 1234,'1'')'),
-//   }
-//   console.log("The entries have been made. A new user is created.");
-  res.render('login', { message: '' });
+app.get('/students', checkAuthenticated, async (req, res) => {
+  const db = getDB();
 
-// }
+  console.log("Received Query Params:", req.query); // Log all query params
 
-  // console.log(email);
+  try {
+      // Fetch has_changed status
+      const [statusResult] = await db.execute(
+          `SELECT IFNULL(MAX(has_changed), 1) AS has_changed FROM users WHERE role = 'student'`
+      );
+      const hasChangedStatus = statusResult[0].has_changed;
 
-  // res.render('login')
+      // Fetch disciplines
+      const [disciplines] = await db.execute(
+          'SELECT id, name, duration FROM discipline'
+      );
+
+      // Fetch branches based on selected discipline
+      let branches = [];
+      console.log("Fetching branches for discipline_id:", req.query.discipline_id);
+      if (req.query.discipline_id) {
+          [branches] = await db.execute(
+              'SELECT branch_id, branch_name FROM branchnew WHERE discipline_id = ?',
+              [req.query.discipline_id]
+          );
+      }
+
+      // Get year dropdown values
+      let years = [];
+      if (req.query.discipline_id) {
+          const selectedDiscipline = disciplines.find(d => d.id == req.query.discipline_id); // Fix: Use `id` instead of `discipline_id`
+          if (selectedDiscipline) {
+              years = Array.from({ length: selectedDiscipline.duration }, (_, i) => i + 1);
+          }
+      }
+
+      // Hardcoded section options
+      let sections = [];
+      if (req.query.discipline_id && req.query.year) {
+          if (req.query.year == '1') {
+              sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+          } else {
+              sections = ['1', '2', '3'];
+          }
+      }
+
+      // Fetch students based on filters and has_filled == 0
+      let students = [];
+      if (req.query.discipline_id && req.query.year && req.query.branch_name && req.query.section) {
+          [students] = await db.execute(
+              `SELECT uniqueid, name 
+               FROM users 
+               WHERE discipline_id = ? 
+                 AND year = ? 
+                 AND branch_name = ? 
+                 AND section = ? 
+                 AND has_filled = 0`, // Add condition for has_filled == 0
+              [req.query.discipline_id, req.query.year, req.query.branch_name, req.query.section]
+          );
+      }
+
+      res.render('students', {
+          hasChangedStatus,  // ✅ Now included
+          disciplines,
+          branches,
+          years,
+          sections,
+          students,
+          discipline_id: req.query.discipline_id || "",
+          branch_name: req.query.branch_name || "",
+          year: req.query.year || "",
+          section: req.query.section || ""
+      });
+
+  } catch (error) {
+      console.error('Error fetching student data:', error);
+      res.status(500).send('Internal Server Error');
+  }
 });
+
+app.get('/api/branches', checkAuthenticated, async (req, res) => {
+const db = getDB();
+const { discipline_id } = req.query;
+
+if (!discipline_id) {
+    return res.status(400).json({ error: "Discipline ID is required" });
+}
+
+try {
+    // Fetch branches for the selected discipline
+    const [branches] = await db.execute(
+        'SELECT branch_id, branch_name FROM branchnew WHERE discipline_id = ?',
+        [discipline_id]
+    );
+
+    // Fetch discipline details (name and duration)
+    const [discipline] = await db.execute(
+        'SELECT name, duration FROM discipline WHERE id = ?',
+        [discipline_id]
+    );
+
+    // Send branches, discipline name, and duration as JSON response
+    res.json({
+        branches,
+        discipline_name: discipline[0]?.name || "", // Include discipline name
+        duration: discipline[0]?.duration || 4 // Default to 4 years if duration is missing
+    });
+} catch (error) {
+    console.error('Error fetching branches:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+}
+});
+
+app.post('/students/toggle', async (req, res) => {
+const db = getDB();
+  try {
+      // Get current state
+      const [result] = await db.execute(`
+          SELECT IFNULL(MAX(has_changed), 1) AS has_changed FROM users WHERE role = 'student'
+      `);
+      const newState = result[0].has_changed ? 0 : 1; // Toggle value
+      
+      // Update database
+      await db.execute(`UPDATE users SET has_changed = ? WHERE role = 'student'`, [newState]);
+
+      res.redirect('/students'); // Reload page after update
+  } catch (error) {
+      console.error('Error updating students:', error);
+      res.status(500).send('Internal Server Error');
+  }
+});
+
+
+app.post('/students/upload', async (req, res) => {
+  const db = getDB();
+
+  // Check if file is uploaded
+  if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).send('No files were uploaded.');
+  }
+
+  const studentFile = req.files.studentFile;
+  const uploadPath = path.join(__dirname, 'uploads', studentFile.name);
+
+  // Move the uploaded file to the server
+  studentFile.mv(uploadPath, async (err) => {
+      if (err) {
+          return res.status(500).send(err);
+      }
+
+      try {
+          // Read the uploaded Excel file
+          const workbook = xlsx.readFile(uploadPath);
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const data = xlsx.utils.sheet_to_json(sheet);
+
+          // Process each row in the file
+          for (const row of data) {
+              const { scholar_number, name, discipline_id, branch, semester, section } = row;
+
+              // Calculate Year from Semester
+              const year = Math.ceil(semester / 2);
+
+              // Insert student data into users table
+              await db.execute(
+                  `INSERT INTO users (uniqueid, name, role, has_filled, password, branch_name, 
+                      year, section, discipline_id, semester, is_allowed) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                      scholar_number, name, 'Student', 0, scholar_number, branch,
+                      year, section, discipline_id, semester, 0
+                  ]
+              );
+          }
+
+          // Delete the uploaded file after processing
+          fs.unlinkSync(uploadPath);
+
+          // Redirect to students page after success
+          res.redirect('/students');
+      } catch (err) {
+          console.error('Error processing the file:', err);
+          res.status(500).send('Error processing the file: ' + err.message);
+      }
+  });
+});
+
+
 //subjects
 // GET /subjects - Fetch subjects based on user discipline and branch
 app.get('/subjects', checkAuthenticated, async (req, res) => {
@@ -1808,38 +1974,6 @@ app.get('/teacher-remarks', checkAuthenticated, async (req, res) => {
 
 // const deepseekService = require('./services/deepseekService'); // Import the service
 
-// app.post('/summarize-feedback', checkAuthenticated, async (req, res) => {
-//   const db = getDB();
-//   const { facultyId, feedbackYear, semesterType } = req.body;
-
-//   try {
-//     // Fetch feedback responses for the selected faculty
-//     const feedbackQuery = `
-//       SELECT f.response 
-//       FROM responses f
-//       WHERE f.fac_id = ? AND f.feedback_year = ?
-//       ${semesterType === 'Odd' ? 'AND (f.semester % 2) = 1' : ''}
-//       ${semesterType === 'Even' ? 'AND (f.semester % 2) = 0' : ''}
-//     `;
-//     const [feedbackResult] = await db.execute(feedbackQuery, [facultyId, feedbackYear]);
-//     const feedbackResponses = feedbackResult.map(row => row.response).join('\n');
-
-//     // If no feedback is found, return an error
-//     if (!feedbackResponses) {
-//       return res.status(404).json({ error: 'No feedback found for the selected faculty.' });
-//     }
-
-//     // Use DeepSeek to summarize the feedback
-//     const summarizedFeedback = await aiServices.summarizeFeedback(feedbackResponses);
-
-//     // Return the summarized feedback and suggestions
-//     res.json({ summary: summarizedFeedback });
-//   } catch (err) {
-//     console.error('Error summarizing feedback:', err);
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// });
-
 app.post('/summarize-feedback', checkAuthenticated, async (req, res) => {
   const db = getDB();
   const { facultyId, feedbackYear, semesterType } = req.body;
@@ -1854,34 +1988,66 @@ app.post('/summarize-feedback', checkAuthenticated, async (req, res) => {
       ${semesterType === 'Even' ? 'AND (f.semester % 2) = 0' : ''}
     `;
     const [feedbackResult] = await db.execute(feedbackQuery, [facultyId, feedbackYear]);
-    const feedbackResponses = feedbackResult.map(row => row.response);
+    const feedbackResponses = feedbackResult.map(row => row.response).join('\n');
 
     // If no feedback is found, return an error
     if (!feedbackResponses) {
       return res.status(404).json({ error: 'No feedback found for the selected faculty.' });
     }
-    console.log(feedbackResponses);
-    // Use DeepSeek to summarize the feedback
-    const response = await axios.post('http://127.0.0.1:5000/analyze-feedback', {
-      feedback: feedbackResponses
-    });
-    console.log(response.data);
-    const result = {
-      negative: response.data.Negative || 0,
-      neutral: response.data.Neutral || 0,
-      positive: response.data.Positive || 0,
-      improvements_needed: response.data.improvements_needed || 0,
-      suggestions: response.data.suggestions || [],
-      total_feedbacks: response.data.total_feedbacks || 0
-    };
 
-    // Send the result to the frontend
-    return res.json(result);
+    // Use DeepSeek to summarize the feedback
+    const summarizedFeedback = await aiServices.summarizeFeedback(feedbackResponses);
+
+    // Return the summarized feedback and suggestions
+    res.json({ summary: summarizedFeedback });
   } catch (err) {
     console.error('Error summarizing feedback:', err);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+// app.post('/summarize-feedback', checkAuthenticated, async (req, res) => {
+//   const db = getDB();
+//   const { facultyId, feedbackYear, semesterType } = req.body;
+
+//   try {
+//     // Fetch feedback responses for the selected faculty
+//     const feedbackQuery = `
+//       SELECT f.response 
+//       FROM responses f
+//       WHERE f.fac_id = ? AND f.feedback_year = ?
+//       ${semesterType === 'Odd' ? 'AND (f.semester % 2) = 1' : ''}
+//       ${semesterType === 'Even' ? 'AND (f.semester % 2) = 0' : ''}
+//     `;
+//     const [feedbackResult] = await db.execute(feedbackQuery, [facultyId, feedbackYear]);
+//     const feedbackResponses = feedbackResult.map(row => row.response);
+
+//     // If no feedback is found, return an error
+//     if (!feedbackResponses) {
+//       return res.status(404).json({ error: 'No feedback found for the selected faculty.' });
+//     }
+//     console.log(feedbackResponses);
+//     // Use DeepSeek to summarize the feedback
+//     const response = await axios.post('http://127.0.0.1:5000/analyze-feedback', {
+//       feedback: feedbackResponses
+//     });
+//     console.log(response.data);
+//     const result = {
+//       negative: response.data.Negative || 0,
+//       neutral: response.data.Neutral || 0,
+//       positive: response.data.Positive || 0,
+//       improvements_needed: response.data.improvements_needed || 0,
+//       suggestions: response.data.suggestions || [],
+//       total_feedbacks: response.data.total_feedbacks || 0
+//     };
+
+//     // Send the result to the frontend
+//     return res.json(result);
+//   } catch (err) {
+//     console.error('Error summarizing feedback:', err);
+//     res.status(500).json({ error: 'Internal Server Error' });
+//   }
+// });
 
 
 

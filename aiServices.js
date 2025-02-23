@@ -12,7 +12,7 @@ const aiService = {
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
       // Send request to Gemini API
-      const result = await model.generateContent(`Summarize this feedback in a para with all the positives negatives and improvements: ${feedbackText}`);
+      const result = await model.generateContent(`Summarize this feedback in a para and not pointwise with all the positives negatives and improvements. Dont add any other points on your own. though if needed just provide few improvement recommendations. But response should be in positive manner to make faculty feel comfortable with it.: ${feedbackText}`);
 
       // Extract response
       const response = await result.response;

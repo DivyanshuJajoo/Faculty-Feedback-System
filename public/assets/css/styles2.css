@@ -18,7 +18,24 @@ body {
    padding: 20px;
    box-sizing: border-box;
    box-shadow: 3px 0 10px rgba(0,0,0,0.2);
+   overflow-y: auto; /* Enables vertical scrolling */
+   scrollbar-width: none; /* For Firefox */
 }
+
+/* Webkit-based browsers (Chrome, Edge, Safari) */
+.sidebar::-webkit-scrollbar {
+   width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+   background-color: #BB86FC;
+   border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+   background: transparent;
+}
+
 
 .sidebar h4 {
    text-align: center;
@@ -92,10 +109,10 @@ body {
   box-shadow: 0 4px 8px rgba(5, 5, 5, 0.3);
 }
 
-.card:hover {
+/* .card:hover {
   transform: translateY(-5px);
   box-shadow: 0 6px 12px rgba(0,0,0,0.4);
-}
+} */
 
 .card img {
   max-width: 80px;

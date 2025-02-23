@@ -262,7 +262,8 @@
     <div id="facultyMapping" class="tab-content active">
         <div class="card">
         <h1>Faculty to Subject Mapping</h1>
-        <p><strong>This mapping is not for students present in first year. For first year upload excel below.</strong> </p>
+        <p style="color: rgb(243, 77, 77);">This mapping is not for students present in first year. For first year upload excel below. </p>
+        <br>
         <form id="facultySubjectForm" action="/mapping/facultySubject" method="POST">
             <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                 <label for="discipline2">Discipline:</label>
@@ -302,11 +303,17 @@
         </form>
 
         <div class="card">
-            <h1>Upload Faculty Subject Excel File</h1>
-            <p><strong>Uploading excel is available for all years.</strong> </p>
+            <p>Upload Faculty Subject Excel File</p>
+            <p style="color: rgb(243, 77, 77);">Uploading excel is available for all years. </p>
             <p><strong>File Format:</strong> The file should be formatted with the following columns: 
                 <code>faculty_id, subject_id, section, is_elective</code>
                 </p>
+                <div class="form-group d-flex align-items-center">
+                    <label class="mr-2">Sample Excel file:</label>
+                    <a href="/downloads/subject_faculty.csv" download class="btn btn-secondary">
+                       Download
+                    </a>
+                   </div>
             <form action="/api/mapping/facultySubjectUpload" method="POST" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="facultyFile">Choose Excel File:</label>
@@ -316,6 +323,7 @@
             </form>
             <div id="uploadMessage" style="margin-top: 10px; font-weight: bold;"></div>
         </div>
+        <br>
 
         <h2>Faculty to Subject Mapping Table</h2>
         <table>
@@ -342,10 +350,16 @@
     </div>
     <div id="studentMapping" class="tab-content">
         <div class="card">
-            <h1>Upload Student Subject Excel File For Electives Only</h1>
+            <p1>Upload Student Subject Excel File For Electives Only</h1>
             <p><strong>File Format:</strong> The file should be formatted with the following columns: 
                 <code>unique_id, Name, Branch Name, Year, Section, Discipline ID, Semester, Subject 1, Subject 2, ...</code>
                 </p>
+                <div class="form-group d-flex align-items-center">
+                    <label class="mr-2">Sample Excel file:</label>
+                    <a href="/downloads/student_subject_mapping.xlsx" download class="btn btn-secondary">
+                       Download
+                    </a>
+                   </div>
             <form action="/api/mapping/studentSubject" method="POST" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="studentFile">Choose Excel File:</label>
